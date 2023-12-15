@@ -1,15 +1,17 @@
 package weapon
 
 import (
+	"fmt"
 	"net/http"
 
+	"github.com/byteweap/weapon/pkg/mapx"
 	"github.com/gorilla/websocket"
 )
 
 type Weapon struct {
 	config   *Config
 	upgrader *websocket.Upgrader
-	sessions map[int64]*Session // 所有连接, key: 连接id
+	sessions mapx.Mapx[string, *Session] // 所有会话, key: 连接id
 }
 
 func New() *Weapon {
@@ -22,7 +24,7 @@ func New() *Weapon {
 	return &Weapon{
 		config:   defaultConfig(),
 		upgrader: upgrader,
-		sessions: make(map[int64]*Session),
+		sessions: mapx.New[string, *Session](true),
 	}
 }
 
@@ -31,14 +33,20 @@ func (w *Weapon) OneConnect(fn func(*Session)) {
 	w.config.connectHandler = fn
 }
 
-// OnMessage 监听消息
+// OnMessage 监听消息.
 func (w *Weapon) OnMessage(fn func(*Session, int, []byte)) {
 	w.config.messageHandler = fn
 }
 
-// OnDisconnect 断开链接
+// OnDisconnect 断开链接.
 func (w *Weapon) OnDisconnect(fn func(*Session)) {
 	w.config.disconnectHandler = fn
+}
+
+// IdGenerator 自定义SessionId生成方法
+// 默认以http.Request的Form表单中uid参数为sessionId,具体实现见defaultSessionIdGenerator.
+func (w *Weapon) IdGenerator(fn func(*http.Request) string) {
+	w.config.sessionIdGenerator = fn
 }
 
 func (w *Weapon) Run(pattern, addr string) {
@@ -51,17 +59,25 @@ func (w *Weapon) Run(pattern, addr string) {
 }
 
 // 结合http使用
-func (w *Weapon) HandleRequest(rw http.ResponseWriter, req *http.Request) error {
+func (w *Weapon) HandleRequest(rw http.ResponseWriter, req *http.Request) {
+
 	conn, err := w.upgrader.Upgrade(rw, req, rw.Header())
 	if err != nil {
-		return err
+		fmt.Printf("Upgrade err: %v \n", err.Error())
+		return
 	}
-	session := newSession(666, w.config, req, conn) // todo Id如何生成
+	defer conn.Close()
+
+	session, err := newSession(w.config, req, conn)
+	if err != nil {
+		fmt.Printf("NewSession err: %v \n", err.Error())
+		return
+	}
+	defer session.close()
+
 	w.config.connectHandler(session)
-
 	session.ReadMessage()
-
-	session.isOpen = false
 	w.config.disconnectHandler(session)
-	return nil
+
+	w.sessions.Delete(session.ID())
 }

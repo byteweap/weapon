@@ -1,6 +1,7 @@
 package weapon
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"sync"
@@ -10,7 +11,7 @@ import (
 )
 
 type Session struct {
-	id      int64
+	id      string
 	Request *http.Request
 	cfg     *Config
 	conn    *websocket.Conn
@@ -18,35 +19,35 @@ type Session struct {
 	isOpen  bool
 }
 
-func newSession(id int64, cfg *Config, req *http.Request, conn *websocket.Conn) *Session {
+func newSession(cfg *Config, req *http.Request, conn *websocket.Conn) (*Session, error) {
 
 	s := &Session{
-		id:      id,
 		Request: req,
 		cfg:     cfg,
 		conn:    conn,
 		mux:     &sync.RWMutex{},
 		isOpen:  true,
 	}
-
+	s.id = cfg.sessionIdGenerator(req)
+	if s.id == "" {
+		return nil, errors.New("session id is empty")
+	}
 	s.conn.SetReadLimit(s.cfg.MaxMessageSize)
 
-	s.conn.SetReadDeadline(time.Now().Add(s.cfg.PongWait))
-	s.conn.SetPongHandler(func(str string) error {
-		s.conn.SetReadDeadline(time.Now().Add(s.cfg.PongWait))
-		fmt.Println("pong : ", str)
-		return nil
-	})
+	// s.conn.SetReadDeadline(time.Now().Add(s.cfg.PongWait))
+	// s.conn.SetPongHandler(func(str string) error {
+	// 	s.conn.SetReadDeadline(time.Now().Add(s.cfg.PongWait))
+	// 	return nil
+	// })
 	if s.cfg.closeHandler != nil {
 		s.conn.SetCloseHandler(func(code int, text string) error {
 			return s.cfg.closeHandler(s, code, text)
 		})
 	}
-
-	return s
+	return s, nil
 }
 
-func (s *Session) ID() int64 {
+func (s *Session) ID() string {
 	return s.id
 }
 
