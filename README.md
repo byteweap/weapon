@@ -1,6 +1,7 @@
 ### weapon
 Elegant websocket package for golang
 
+[x] A
 - [] TODO 并发问题检测
 - [] TODO 广播
 - [] TODO 主动推送至某人
