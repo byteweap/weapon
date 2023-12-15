@@ -23,7 +23,7 @@ type Config struct {
 
 var (
 	defaultConnectHandler = func(session *Session) {
-		fmt.Println("connectHandler : ", session.ID(), " ", session.Request)
+		fmt.Println("connectHandler : ", session.ID(), " ", session.HttpRequest())
 	}
 	defaultCloseHandler = func(session *Session, i int, s string) error {
 		fmt.Printf("closeHandler: id: %v, i: %v, s: %v \n", session.ID(), i, s)

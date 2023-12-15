@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -12,20 +11,18 @@ import (
 
 type Session struct {
 	id      string
-	Request *http.Request
+	request *http.Request
 	cfg     *Config
 	conn    *websocket.Conn
-	mux     *sync.RWMutex
 	isOpen  bool
 }
 
 func newSession(cfg *Config, req *http.Request, conn *websocket.Conn) (*Session, error) {
 
 	s := &Session{
-		Request: req,
+		request: req,
 		cfg:     cfg,
 		conn:    conn,
-		mux:     &sync.RWMutex{},
 		isOpen:  true,
 	}
 	s.id = cfg.sessionIdGenerator(req)
@@ -49,6 +46,10 @@ func newSession(cfg *Config, req *http.Request, conn *websocket.Conn) (*Session,
 
 func (s *Session) ID() string {
 	return s.id
+}
+
+func (s *Session) HttpRequest() *http.Request {
+	return s.request
 }
 
 func (s *Session) ReadMessage() {
