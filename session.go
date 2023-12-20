@@ -4,10 +4,19 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
 )
+
+// session对象池
+// 保存和复用临时对象,减少内存分配,降低GC压力
+var sessionPool = &sync.Pool{
+	New: func() any {
+		return new(Session)
+	},
+}
 
 type Session struct {
 	id      string
@@ -19,18 +28,18 @@ type Session struct {
 
 func newSession(cfg *Config, req *http.Request, conn *websocket.Conn) (*Session, error) {
 
-	s := &Session{
-		request: req,
-		cfg:     cfg,
-		conn:    conn,
-		isOpen:  true,
-	}
-	s.id = cfg.sessionIdGenerator(req)
-	if s.id == "" {
+	sid := cfg.sessionIdGenerator(req)
+	if sid == "" {
 		return nil, errors.New("session id is empty")
 	}
-	s.conn.SetReadLimit(s.cfg.MaxMessageSize)
+	s := sessionPool.Get().(*Session)
+	s.id = sid
+	s.request = req
+	s.cfg = cfg
+	s.conn = conn
+	s.isOpen = true
 
+	s.conn.SetReadLimit(s.cfg.MaxMessageSize)
 	// s.conn.SetReadDeadline(time.Now().Add(s.cfg.PongWait))
 	// s.conn.SetPongHandler(func(str string) error {
 	// 	s.conn.SetReadDeadline(time.Now().Add(s.cfg.PongWait))
@@ -90,4 +99,18 @@ func (s *Session) ping() {
 
 func (s *Session) close() {
 	s.isOpen = false
+	s.putToPool()
+}
+
+func (s *Session) putToPool() {
+	if s == nil {
+		return
+	}
+	s.id = ""
+	s.cfg = nil
+	s.conn = nil
+	s.request = nil
+	s.isOpen = false
+
+	sessionPool.Put(s)
 }
