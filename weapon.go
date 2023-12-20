@@ -1,6 +1,7 @@
 package weapon
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -58,13 +59,21 @@ func (w *Weapon) Run(pattern, addr string) {
 	}
 }
 
-func (w *Weapon) Broadcast(msg []byte, filter func(s *Session) bool) {
+func (w *Weapon) PushToAll(msg []byte, filter func(s *Session) bool) {
 	w.sessions.Range(func(_ string, s *Session) {
 		if filter != nil && !filter(s) {
 			return
 		}
-		s.push(msg)
+		_ = s.push(msg)
 	})
+}
+
+func (w *Weapon) PushToOne(sessionId string, msg []byte) error {
+	s, ok := w.sessions.Get(sessionId)
+	if !ok || s == nil {
+		return errors.New("session not found")
+	}
+	return s.push(msg)
 }
 
 // 结合http使用
@@ -82,6 +91,8 @@ func (w *Weapon) HandleRequest(rw http.ResponseWriter, req *http.Request) {
 		fmt.Printf("NewSession err: %v \n", err.Error())
 		return
 	}
+	w.sessions.Set(session.ID(), session)
+
 	defer session.close()
 
 	w.config.connectHandler(session)
