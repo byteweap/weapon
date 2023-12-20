@@ -58,6 +58,15 @@ func (w *Weapon) Run(pattern, addr string) {
 	}
 }
 
+func (w *Weapon) Broadcast(msg []byte, filter func(s *Session) bool) {
+	w.sessions.Range(func(_ string, s *Session) {
+		if filter != nil && !filter(s) {
+			return
+		}
+		s.push(msg)
+	})
+}
+
 // 结合http使用
 func (w *Weapon) HandleRequest(rw http.ResponseWriter, req *http.Request) {
 

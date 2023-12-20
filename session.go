@@ -66,6 +66,10 @@ func (s *Session) ReadMessage() {
 	}
 }
 
+func (s *Session) push(msg []byte) {
+	s.conn.WriteMessage(websocket.TextMessage, msg)
+}
+
 func (s *Session) ping() {
 
 	go func() {
